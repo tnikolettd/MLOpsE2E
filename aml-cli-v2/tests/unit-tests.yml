@@ -1,0 +1,65 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+      
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.10'
+      architecture: 'x64'
+
+  - script: |
+      python -m pip install --upgrade pip setuptools wheel Cython
+      pip install pytest codecov pydocstyle pytest-cov pylint pylint_junit flake8==3.7.* flake8_formatter_junit_xml==0.0.*
+    displayName: 'Install testing dependencies'
+
+  - script: |
+      pip install https://files.pythonhosted.org/packages/04/0b/4506cb2e831cea4b0214d3625430e921faaa05a7fb520458c75a2dbd2152/fusepy-3.0.1.tar.gz
+      pip install --only-binary :all: -r data-science/environment/train-requirements.txt --no-cache-dir
+    displayName: 'Install project requirements'
+
+  - script: |
+      flake8 data-science/src/ --output-file=flake8-testresults.xml --format junit-xml --select=E9,F63,F7,F82
+      echo "No fatal or syntax errors"
+    displayName: 'Run code quality tests (Flake8)'
+
+  - script: |
+      mkdir pylint_results
+      find data-science/src/ -name "*.py" -exec bash -c 'file="$1"; output="pylint_results/$(echo $file | sed "s/[^a-zA-Z0-9]/_/g")-pylint-testresults.xml"; pylint --output-format=pylint_junit.JUnitReporter "$file" > "$output"; pylint_exit_code=$?; if [ $pylint_exit_code -eq 1 ] || [ $pylint_exit_code -eq 2 ]; then echo "Pylint failed for $file, see $output for details"; exit 1; else echo "Pylint succeeded for $file, see $output for details"; fi' _ {} \;
+      echo "No fatal or syntax errors"
+    displayName: 'Run code quality tests (Pylint)'
+
+  - script: |
+      pytest -v data-science/src/*/test_*.py --doctest-modules --junitxml=unit-testresults.xml --cov=data-science/src --cov-append --cov-report=xml:/home/vsts/work/1/s/coverage.xml --cov-report=html:/home/vsts/work/1/s/htmlcov
+    displayName: 'Run all unit tests'
+
+  - task: PublishTestResults@2
+    inputs:
+      testResultsFormat: 'JUnit'  # Specifies the format of the test results. JUnit is correct for your scenario.
+      testResultsFiles: 'unit-testresults.xml'  # Ensures it matches the output filenames from the previous commands.
+      searchFolder: '$(System.DefaultWorkingDirectory)'  # Optional: Specifies the folder to begin searching for test result files.
+      mergeTestResults: true  # Optional: Merges test results from all files into a single result.
+      failTaskOnFailedTests: true  # Optional: Fails the task if any test results are marked as failed.
+      testRunTitle: '$(Agent.OS) - $(Build.BuildNumber)[$(Agent.JobName)] - Python $(python.version) - Linting and Unit Test results'  # Customizes the test run title.
+    condition: succeededOrFailed()  # Runs this task whether the previous tasks succeeded or failed.
+    displayName: 'Publish unit test results'  # Provides a name for this task in the logs and UI.
+
+  - task: PublishCodeCoverageResults@2
+    inputs:
+      summaryFileLocation: '/home/vsts/work/1/s/coverage.xml'
+      pathToSources: '/home/vsts/work/1/s/data-science/src/'  # Adjust if your source files are not mapped correctly in the report
+      failIfCoverageEmpty: true  # Optional based on your preference
+    displayName: 'Publish Coverage Results'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: 'htmlcov'
+      ArtifactName: 'HtmlCoverageReport'
+      publishLocation: 'Container'
+    displayName: 'Publish HTML Coverage Report'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: 'pylint_results'
+      ArtifactName: 'PylintResults'
+      publishLocation: 'Container'
+    displayName: 'Publish Pylint Results'

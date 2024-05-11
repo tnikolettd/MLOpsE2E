@@ -1,0 +1,24 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
+parameters:
+- name: environment_name
+  type: string
+- name: environment_file
+  type: string
+- name: enable_monitoring
+  type: string
+  default: 'false'
+
+steps:
+  - task: AzureCLI@2
+    displayName: Register Azure ML environment (conda)
+    continueOnError: true
+    inputs: 
+      azureSubscription: $(ado_service_connection_rg) #needs to have access at the RG level 
+      scriptType: bash
+      workingDirectory: $(System.DefaultWorkingDirectory)
+      scriptLocation: inlineScript
+      inlineScript: |
+        find sh/ -type f -name "*.sh" -exec chmod +x {} +
+        ./sh/environment-versioning.sh ${{ parameters.environment_name }} ${{ parameters.environment_file }}

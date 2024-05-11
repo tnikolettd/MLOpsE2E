@@ -1,0 +1,18 @@
+variables:
+- template: ../../config-infra-prod.yml
+
+trigger:
+- none
+
+stages:
+- stage: DeleteEndpoint
+  displayName: Test doing inference on the endpoint
+  jobs:
+    - job: DeleteEndpoint
+      steps:
+      - checkout: self
+        path: s/
+      - template: /aml-cli-v2/install-az-cli.yml
+      - template: /aml-cli-v2/install-aml-cli.yml
+      - template: /aml-cli-v2/connect-to-workspace.yml
+      - template: /aml-cli-v2/delete-endpoint.yml
